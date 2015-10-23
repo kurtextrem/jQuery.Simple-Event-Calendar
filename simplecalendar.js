@@ -1,263 +1,243 @@
-var calendar = {
+!function (window, $) {
+	'use strict'
 
-  init: function() {
+	var _date = new Date(),
+		_month = _date.getMonth() + 1,
+		_year = _date.getFullYear() // for copying purposes
 
-    var mon = 'Mon';
-    var tue = 'Tue';
-    var wed = 'Wed';
-    var thur = 'Thur';
-    var fri = 'Fri';
-    var sat = 'Sat';
-    var sund = 'Sun';
+	function Simplecalendar(element, options) {
+		this.options = options
 
-    /**
-     * Get current date
-     */
-    var d = new Date();
-    var strDate = yearNumber + "/" + (d.getMonth() + 1) + "/" + d.getDate();
-    var yearNumber = (new Date).getFullYear();
-    /**
-     * Get current month and set as '.current-month' in title
-     */
-    var monthNumber = d.getMonth() + 1;
+		this.$elem = $(element)
+		this.$month = this.$elem.find('.month')
+		this.$calendar = this.$elem.find('.event-calendar')
+		this.$days = this.$elem.find('.event-days > tr')
+		this.events = {}
 
-    function GetMonthName(monthNumber) {
-      var months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-      return months[monthNumber - 1];
-    }
+		this.today = _date.getDate()
+		this.month = _month + options._count
+		this.year = _year
+		if (this.month === 13) {
+			this.month = 1
+			this.year = _year + 1
+		}
 
-    setMonth(monthNumber, mon, tue, wed, thur, fri, sat, sund);
+		this.parseEvents()
+		this.render(this.month, this.year)
+		this.addListener()
+	}
 
-    function setMonth(monthNumber, mon, tue, wed, thur, fri, sat, sund) {
-      $('.month').text(GetMonthName(monthNumber) + ' ' + yearNumber);
-      $('.month').attr('data-month', monthNumber);
-      printDateNumber(monthNumber, mon, tue, wed, thur, fri, sat, sund);
-    }
+	Simplecalendar.VERSION = '0.1'
 
-    $('.btn-next').on('click', function(e) {
-      var monthNumber = $('.month').attr('data-month');
-      if (monthNumber > 11) {
-        $('.month').attr('data-month', '0');
-        var monthNumber = $('.month').attr('data-month');
-        yearNumber = yearNumber + 1;
-        setMonth(parseInt(monthNumber) + 1, mon, tue, wed, thur, fri, sat, sund);
-      } else {
-        setMonth(parseInt(monthNumber) + 1, mon, tue, wed, thur, fri, sat, sund);
-      };
-    });
+	Simplecalendar.DEFAULT = {
+		days: ['Sun', 'Mon', 'Tue', 'Wed', 'Thur', 'Fri', 'Sat'],
+		months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+		_count: -1,
+		onShowEvent: function () {}
+	}
 
-    $('.btn-prev').on('click', function(e) {
-      var monthNumber = $('.month').attr('data-month');
-      if (monthNumber < 2) {
-        $('.month').attr('data-month', '13');
-        var monthNumber = $('.month').attr('data-month');
-        yearNumber = yearNumber - 1;
-        setMonth(parseInt(monthNumber) - 1, mon, tue, wed, thur, fri, sat, sund);
-      } else {
-        setMonth(parseInt(monthNumber) - 1, mon, tue, wed, thur, fri, sat, sund);
-      };
-    });
+	Simplecalendar.prototype.addListener = function () {
+		this.$calendar.on('click', 'tr > td', this.displayEvent.bind(this))
 
-    /**
-     * Get all dates for current month
-     */
+		$('.btn-next', this.$elem).click(function (e) {
+			if (this.month === 12) {
+				++this.year
+				this.month = 0
+			}
 
-    function printDateNumber(monthNumber, mon, tue, wed, thur, fri, sat, sund) {
+			++this.month
+			this.render()
+		}.bind(this))
 
-      $($('tbody.event-calendar tr')).each(function(index) {
-        $(this).empty();
-      });
+		$('.btn-prev', this.$elem).click(function (e) {
+			if (this.month === 1) {
+				--this.year
+				this.month = 12
+			}
 
-      $($('thead.event-days tr')).each(function(index) {
-        $(this).empty();
-      });
+			--this.month
+			this.render()
+		}.bind(this))
+	}
 
-      function getDaysInMonth(month, year) {
-        // Since no month has fewer than 28 days
-        var date = new Date(year, month, 1);
-        var days = [];
-        while (date.getMonth() === month) {
-          days.push(new Date(date));
-          date.setDate(date.getDate() + 1);
-        }
-        return days;
-      }
+	Simplecalendar.prototype.render = function () {
+		this.setMonth()
 
-      i = 0;
+		if (!this.issetDayNames())
+			this.setDayNames()
 
-      setDaysInOrder(mon, tue, wed, thur, fri, sat, sund);
+		if (!this.issetDays()) {
+			this.setDays()
+			this.setEvents()
+			this.setCurrentDay()
+		}
 
-      function setDaysInOrder(mon, tue, wed, thur, fri, sat, sund) {
-        var monthDay = getDaysInMonth(monthNumber - 1, yearNumber)[0].toString().substring(0, 3);
-        if (monthDay === 'Mon') {
-          $('thead.event-days tr').append('<td>' + mon + '</td><td>' + tue + '</td><td>' + wed + '</td><td>' + thur + '</td><td>' + fri + '</td><td>' + sat + '</td><td>' + sund + '</td>');
-        } else if (monthDay === 'Tue') {
-          $('thead.event-days tr').append('<td>' + tue + '</td><td>' + wed + '</td><td>' + thur + '</td><td>' + fri + '</td><td>' + sat + '</td><td>' + sund + '</td><td>' + mon + '</td>');
-        } else if (monthDay === 'Wed') {
-          $('thead.event-days tr').append('<td>' + wed + '</td><td>' + thur + '</td><td>' + fri + '</td><td>' + sat + '</td><td>' + sund + '</td><td>' + mon + '</td><td>' + tue + '</td>');
-        } else if (monthDay === 'Thu') {
-          $('thead.event-days tr').append('<td>' + thur + '</td><td>' + fri + '</td><td>' + sat + '</td><td>' + sund + '</td><td>' + mon + '</td><td>' + tue + '</td><td>' + wed + '</td>');
-        } else if (monthDay === 'Fri') {
-          $('thead.event-days tr').append('<td>' + fri + '</td><td>' + sat + '</td><td>' + sund + '</td><td>' + mon + '</td><td>' + tue + '</td><td>' + wed + '</td><td>' + thur + '</td>');
-        } else if (monthDay === 'Sat') {
-          $('thead.event-days tr').append('<td>' + sat + '</td><td>' + sund + '</td><td>' + mon + '</td><td>' + tue + '</td><td>' + wed + '</td><td>' + thur + '</td><td>' + fri + '</td>');
-        } else if (monthDay === 'Sun') {
-          $('thead.event-days tr').append('<td>' + sund + '</td><td>' + mon + '</td><td>' + tue + '</td><td>' + wed + '</td><td>' + thur + '</td><td>' + fri + '</td><td>' + sat + '</td>');
-        }
-      };
-      $(getDaysInMonth(monthNumber - 1, yearNumber)).each(function(index) {
-        var index = index + 1;
-        if (index < 8) {
-          $('tbody.event-calendar tr.1').append('<td date-month="' + monthNumber + '" date-day="' + index + '" date-year="' + yearNumber + '">' + index + '</td>');
-        } else if (index < 15) {
-          $('tbody.event-calendar tr.2').append('<td date-month="' + monthNumber + '" date-day="' + index + '" date-year="' + yearNumber + '">' + index + '</td>');
-        } else if (index < 22) {
-          $('tbody.event-calendar tr.3').append('<td date-month="' + monthNumber + '" date-day="' + index + '" date-year="' + yearNumber + '">' + index + '</td>');
-        } else if (index < 29) {
-          $('tbody.event-calendar tr.4').append('<td date-month="' + monthNumber + '" date-day="' + index + '" date-year="' + yearNumber + '">' + index + '</td>');
-        } else if (index < 32) {
-          $('tbody.event-calendar tr.5').append('<td date-month="' + monthNumber + '" date-day="' + index + '" date-year="' + yearNumber + '">' + index + '</td>');
-        }
-        i++;
-      });
-      var date = new Date();
-      var month = date.getMonth() + 1;
-      var thisyear = new Date().getFullYear();
-      setCurrentDay(month, thisyear);
-      setEvent();
-      displayEvent();
-    }
+		this.displayEvent()
+	}
 
-    /**
-     * Get current day and set as '.current-day'
-     */
-    function setCurrentDay(month, year) {
-      var viewMonth = $('.month').attr('data-month');
-      var eventYear = $('.event-days').attr('date-year');
-      if (parseInt(year) === yearNumber) {
-        if (parseInt(month) === parseInt(viewMonth)) {
-          $('tbody.event-calendar td[date-day="' + d.getDate() + '"]').addClass('current-day');
-        }
-      }
-    };
+	Simplecalendar.prototype.setMonth = function () {
+		this.$month.text(this.getMonthName(this.month) + ' ' + this.year)
+		this.$month.attr({
+			'data-month': this.month,
+			'data-year': this.year
+		})
+	}
 
-    /**
-     * Add class '.active' on calendar date
-     */
-    $('tbody td').on('click', function(e) {
-      if ($(this).hasClass('event')) {
-        $('tbody.event-calendar td').removeClass('active');
-        $(this).addClass('active');
-      } else {
-        $('tbody.event-calendar td').removeClass('active');
-      };
-    });
+	Simplecalendar.prototype.setDayNames = function () {
+		var firstDay = getFirstDayOfMonth(this.month, this.year),
+		html = ''
 
-    /**
-     * Add '.event' class to all days that has an event
-     */
-    function setEvent() {
-      $('.day-event').each(function(i) {
-        var eventMonth = $(this).attr('date-month');
-        var eventDay = $(this).attr('date-day');
-        var eventYear = $(this).attr('date-year');
-        var eventClass = $(this).attr('event-class');
-        if (eventClass === undefined) eventClass = 'event';
-        else eventClass = 'event ' + eventClass;
+		// create new copy to prevent modification, cut out and add them in the true order
+		var _days = this.options.days.slice(0),
+		days = _days.splice(firstDay)
 
-        if (parseInt(eventYear) === yearNumber) {
-          $('tbody.event-calendar tr td[date-month="' + eventMonth + '"][date-day="' + eventDay + '"]').addClass(eventClass);
-        }
-      });
-    };
+		days = days.concat(_days)
+		for (var i = 0; i < days.length; i++) {
+			html += '<td data-month="' + this.month + '" data-year="' + this.year + '">' + days[i] + '</td>'
+		}
 
-    /**
-     * Get current day on click in calendar
-     * and find day-event to display
-     */
-    function displayEvent() {
-      $('tbody.event-calendar td').on('click', function(e) {
-        $('.day-event').slideUp('fast');
-        var monthEvent = $(this).attr('date-month');
-        var dayEvent = $(this).text();
-        $('.day-event[date-month="' + monthEvent + '"][date-day="' + dayEvent + '"]').slideDown('fast');
-      });
-    };
+		this.$days.append(html)
+	}
 
-    /**
-     * Close day-event
-     */
-    $('.close').on('click', function(e) {
-      $(this).parent().slideUp('fast');
-    });
+	Simplecalendar.prototype.issetDayNames = function () {
+		this.$days.find('td').addClass('hidden')
 
-    /**
-     * Save & Remove to/from personal list
-     */
-    $('.save').click(function() {
-      if (this.checked) {
-        $(this).next().text('Remove from personal list');
-        var eventHtml = $(this).closest('.day-event').html();
-        var eventMonth = $(this).closest('.day-event').attr('date-month');
-        var eventDay = $(this).closest('.day-event').attr('date-day');
-        var eventNumber = $(this).closest('.day-event').attr('data-number');
-        $('.person-list').append('<div class="day" date-month="' + eventMonth + '" date-day="' + eventDay + '" data-number="' + eventNumber + '" style="display:none;">' + eventHtml + '</div>');
-        $('.day[date-month="' + eventMonth + '"][date-day="' + eventDay + '"]').slideDown('fast');
-        $('.day').find('.close').remove();
-        $('.day').find('.save').removeClass('save').addClass('remove');
-        $('.day').find('.remove').next().addClass('hidden-print');
-        remove();
-        sortlist();
-      } else {
-        $(this).next().text('Save to personal list');
-        var eventMonth = $(this).closest('.day-event').attr('date-month');
-        var eventDay = $(this).closest('.day-event').attr('date-day');
-        var eventNumber = $(this).closest('.day-event').attr('data-number');
-        $('.day[date-month="' + eventMonth + '"][date-day="' + eventDay + '"][data-number="' + eventNumber + '"]').slideUp('slow');
-        setTimeout(function() {
-          $('.day[date-month="' + eventMonth + '"][date-day="' + eventDay + '"][data-number="' + eventNumber + '"]').remove();
-        }, 1500);
-      }
-    });
+		var $elems = this.$days.find('td[data-month="' + this.month + '"][data-year="' + this.year + '"]')
+		if ($elems.length > 0)
+			return $elems.removeClass('hidden')
 
-    function remove() {
-      $('.remove').click(function() {
-        if (this.checked) {
-          $(this).next().text('Remove from personal list');
-          var eventMonth = $(this).closest('.day').attr('date-month');
-          var eventDay = $(this).closest('.day').attr('date-day');
-          var eventNumber = $(this).closest('.day').attr('data-number');
-          $('.day[date-month="' + eventMonth + '"][date-day="' + eventDay + '"][data-number="' + eventNumber + '"]').slideUp('slow');
-          $('.day-event[date-month="' + eventMonth + '"][date-day="' + eventDay + '"][data-number="' + eventNumber + '"]').find('.save').attr('checked', false);
-          $('.day-event[date-month="' + eventMonth + '"][date-day="' + eventDay + '"][data-number="' + eventNumber + '"]').find('span').text('Save to personal list');
-          setTimeout(function() {
-            $('.day[date-month="' + eventMonth + '"][date-day="' + eventDay + '"][data-number="' + eventNumber + '"]').remove();
-          }, 1500);
-        }
-      });
-    }
+		return false
+	}
 
-    /**
-     * Sort personal list
-     */
-    function sortlist() {
-      var personList = $('.person-list');
+	Simplecalendar.prototype.setDays = function () {
+		var length = getMonthLength(this.month, this.year),
+		html = '',
+		tr = ['', '', '', '', '']
 
-      personList.find('.day').sort(function(a, b) {
-        return +a.getAttribute('date-day') - +b.getAttribute('date-day');
-      }).appendTo(personList);
-    }
+		for (var i = 1; i <= length; i++) {
+			if (i < 8) {
+				tr[0] += '<td data-month="' + this.month + '" data-day="' + i + '" data-year="' + this.year + '">' + i + '</td>'
+			} else if (i < 15) {
+				tr[1] += '<td data-month="' + this.month + '" data-day="' + i + '" data-year="' + this.year + '">' + i + '</td>'
+			} else if (i < 22) {
+				tr[2] += '<td data-month="' + this.month + '" data-day="' + i + '" data-year="' + this.year + '">' + i + '</td>'
+			} else if (i < 29) {
+				tr[3] += '<td data-month="' + this.month + '" data-day="' + i + '" data-year="' + this.year + '">' + i + '</td>'
+			} else if (i < 32) {
+				tr[4] += '<td data-month="' + this.month + '" data-day="' + i + '" data-year="' + this.year + '">' + i + '</td>'
+			}
+		}
 
-    /**
-     * Print button
-     */
-    $('.print-btn').click(function() {
-      window.print();
-    });
+		for (var i = 0; i < tr.length; i++) {
+			html += '<tr class="' + (i + 1) + '" data-month="' + this.month + '" data-year="' + this.year + '">' + tr[i] + '</tr>'
+		}
 
-  },
-};
+		this.$calendar.append(html)
+	}
 
-$(document).ready(function() {
-  calendar.init();
-});
+	Simplecalendar.prototype.issetDays = function () {
+		this.$calendar.find('tr').addClass('hidden')
+
+		var $elems = this.$calendar.find('tr[data-month="' + this.month + '"][data-year="' + this.year + '"]')
+		if ($elems.length > 0)
+			return $elems.removeClass('hidden')
+
+		return false
+	}
+
+	Simplecalendar.prototype.parseEvents = function () {
+		this.$elem.find('.day-event').each(function (i, event) {
+			this.addEvent(event.dataset.day, event.dataset.month, event.dataset.year, event.dataset.eventClass || '')
+		}.bind(this))
+	}
+
+	Simplecalendar.prototype.addEvent = function (day, month, year, eventClass) {
+		var s = year + '-' + month
+		if (!this.events[s])
+			this.events[s] = []
+
+		this.events[s].push({
+			eventClass: eventClass,
+			day: day
+		})
+	}
+
+	Simplecalendar.prototype.removeEvent = function (day, month, year) {
+
+	}
+
+	Simplecalendar.prototype.setEvents = function () {
+		var events = this.events[this.year + '-' + this.month] || []
+		for (var i = 0; i < events.length; i++) {
+			this.$calendar.find('td[data-month="' + this.month + '"][data-day="' + events[i].day + '"][data-year="' + this.year + '"]').addClass('event ' + events[i].eventClass)
+		}
+	}
+
+	Simplecalendar.prototype.displayEvent = function (e) {
+		var month = this.month,
+			day = this.today
+
+		this.$calendar.find('.active').removeClass('active')
+		if (e) {
+			month = e.currentTarget.dataset.month,
+			day = e.currentTarget.dataset.day
+			e.currentTarget.classList.add('active')
+		}
+
+		$('.day-event.in', this.$elem).slideUp('fast')
+
+		$('.day-event[data-month="' + month + '"][data-day="' + day + '"][data-year="' + this.year + '"]', this.$elem).slideDown('fast').addClass('in')
+
+		this.options.onShowEvent()
+	}
+
+	Simplecalendar.prototype.setCurrentDay = function (month, year) {
+		this.$calendar.find('td[data-month="' + _month + '"][data-day="' + this.today + '"][data-year="' + _year + '"]').addClass('current-day')
+	}
+
+	Simplecalendar.prototype.getMonthName = function (month) {
+		return this.options.months[month - 1]
+	}
+
+	function getFirstDayOfMonth(month, year) {
+		return new Date(year, month - 1, 1).getDay()
+	}
+
+	function getMonthLength(month, year) {
+		return new Date(year, month - 1, 0).getDate()
+	}
+
+	var triggered = false
+	function Plugin(options) {
+		options = $.extend(Simplecalendar.DEFAULT, options)
+		this.each(function () {
+			++options._count
+			new Simplecalendar(this, options)
+		})
+
+		this.on('click', '.btn-prev, .btn-next', function (e) {
+			if (!triggered) {
+				triggered = true
+				$('.' + e.currentTarget.classList[0]).each(function (i, item) {
+					if (item !== e.currentTarget)
+						this.click()
+				})
+				return
+			}
+			triggered = false
+		}.bind(this))
+
+		$('.close').click(function (e) {
+			$(e.currentTarget).parent().slideUp('fast')
+		})
+
+		$('.print-btn').click(function () {
+			window.print()
+		})
+
+		return this
+	}
+
+	$.fn.simplecalendar = Plugin
+	$.fn.simplecalendar.Constructor = Simplecalendar
+}(window, jQuery);
