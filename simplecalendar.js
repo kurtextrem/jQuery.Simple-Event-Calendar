@@ -209,7 +209,7 @@
 
 	var triggered = false
 	function Plugin(options) {
-		options = $.extend(Simplecalendar.DEFAULT, options)
+		options = $.extend({}, Simplecalendar.DEFAULT, options)
 		this.each(function () {
 			++options._count
 			new Simplecalendar(this, options)
