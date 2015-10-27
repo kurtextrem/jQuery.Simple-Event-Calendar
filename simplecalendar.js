@@ -12,7 +12,14 @@
 		this.$month = this.$elem.find('.month')
 		this.$calendar = this.$elem.find('.event-calendar')
 		this.$days = this.$elem.find('.event-days > tr')
+		this.$selected = []
+		this.$events = $(this.options.events)
 		this.events = {}
+		if (this.options.selectRange) {
+			this.$all = $(this.options.otherInstances).find('.event-calendar')
+		} else {
+			this.$all = this.$calendar
+		}
 
 		this.today = _date.getDate()
 		this.month = _month + options._count
@@ -32,12 +39,18 @@
 	Simplecalendar.DEFAULT = {
 		days: ['Sun', 'Mon', 'Tue', 'Wed', 'Thur', 'Fri', 'Sat'],
 		months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+		events: '.events',
+		otherInstances: '.simplecalendar',
+
+		selectRange: true,
+
 		_count: -1,
+
 		onShowEvent: function () {}
 	}
 
 	Simplecalendar.prototype.addListener = function () {
-		this.$calendar.on('click', 'tr > td', this.displayEvent.bind(this))
+		this.$calendar.on('click', 'tr > td', this.dayClick.bind(this))
 
 		$('.btn-next', this.$elem).click(function (e) {
 			if (this.month === 12) {
@@ -58,24 +71,31 @@
 			--this.month
 			this.render()
 		}.bind(this))
+
+		if (this.options.selectRange) {
+			this.$all.on('click', 'tr > td', function (e) {
+				this.markRange(e.currentTarget)
+			}.bind(this))
+			this.$all.on('mouseover', 'tr > td', this.rangeHover.bind(this))
+		}
 	}
 
 	Simplecalendar.prototype.render = function () {
-		this.setMonth()
+		this.renderMonth()
 
 		if (!this.issetDayNames())
-			this.setDayNames()
+			this.renderDayNames()
 
 		if (!this.issetDays()) {
-			this.setDays()
-			this.setEvents()
-			this.setCurrentDay()
+			this.renderDays()
+			this.renderEvents()
+			this.renderCurrentDay()
 		}
 
-		this.displayEvent()
+		this.displayEvent(this.$calendar.find('td[data-month="' + this.month + '"][data-day="' + this.today + '"][data-year="' + this.year + '"]').data('events'))
 	}
 
-	Simplecalendar.prototype.setMonth = function () {
+	Simplecalendar.prototype.renderMonth = function () {
 		this.$month.text(this.getMonthName(this.month) + ' ' + this.year)
 		this.$month.attr({
 			'data-month': this.month,
@@ -83,7 +103,7 @@
 		})
 	}
 
-	Simplecalendar.prototype.setDayNames = function () {
+	Simplecalendar.prototype.renderDayNames = function () {
 		var firstDay = getFirstDayOfMonth(this.month, this.year),
 		html = ''
 
@@ -109,23 +129,24 @@
 		return false
 	}
 
-	Simplecalendar.prototype.setDays = function () {
+	Simplecalendar.prototype.renderDays = function () {
 		var length = getMonthLength(this.month, this.year),
 		html = '',
-		tr = ['', '', '', '', '']
+		tr = ['', '', '', '', ''],
+		toAdd = 0
 
 		for (var i = 1; i <= length; i++) {
-			if (i < 8) {
-				tr[0] += '<td data-month="' + this.month + '" data-day="' + i + '" data-year="' + this.year + '">' + i + '</td>'
-			} else if (i < 15) {
-				tr[1] += '<td data-month="' + this.month + '" data-day="' + i + '" data-year="' + this.year + '">' + i + '</td>'
+			// if (i < 8)
+			if (i < 15) {
+				toAdd = 1
 			} else if (i < 22) {
-				tr[2] += '<td data-month="' + this.month + '" data-day="' + i + '" data-year="' + this.year + '">' + i + '</td>'
+				toAdd = 2
 			} else if (i < 29) {
-				tr[3] += '<td data-month="' + this.month + '" data-day="' + i + '" data-year="' + this.year + '">' + i + '</td>'
+				toAdd = 3
 			} else if (i < 32) {
-				tr[4] += '<td data-month="' + this.month + '" data-day="' + i + '" data-year="' + this.year + '">' + i + '</td>'
+				toAdd = 4
 			}
+			tr[toAdd] += '<td data-month="' + this.month + '" data-day="' + i + '" data-year="' + this.year + '"><div>' + i + '</div></td>'
 		}
 
 		for (var i = 0; i < tr.length; i++) {
@@ -146,53 +167,109 @@
 	}
 
 	Simplecalendar.prototype.parseEvents = function () {
-		this.$elem.find('.day-event').each(function (i, event) {
-			this.addEvent(event.dataset.day, event.dataset.month, event.dataset.year, event.dataset.eventClass || '')
+		this.$events.find('.day-event').each(function (i, event) {
+			var range = moment.range(new Date(+event.dataset.from), new Date(+event.dataset.to))
+			range.by('day', function (moment) {
+				this.addEvent(moment, event.dataset)
+			}.bind(this))
 		}.bind(this))
 	}
 
-	Simplecalendar.prototype.addEvent = function (day, month, year, eventClass) {
-		var s = year + '-' + month
+	Simplecalendar.prototype.addEvent = function (moment, dataset) {
+		var s = moment.year() + '-' + (moment.month() + 1),
+		day = moment.date()
 		if (!this.events[s])
-			this.events[s] = []
+			this.events[s] = {}
 
-		this.events[s].push({
-			eventClass: eventClass,
-			day: day
-		})
-	}
+		if (!this.events[s][day])
+			this.events[s][day] = {}
 
-	Simplecalendar.prototype.removeEvent = function (day, month, year) {
-
-	}
-
-	Simplecalendar.prototype.setEvents = function () {
-		var events = this.events[this.year + '-' + this.month] || []
-		for (var i = 0; i < events.length; i++) {
-			this.$calendar.find('td[data-month="' + this.month + '"][data-day="' + events[i].day + '"][data-year="' + this.year + '"]').addClass('event ' + events[i].eventClass)
+		this.events[s][day][dataset.eventid] = {
+			from: '0:00',
+			to: '23:59',
+			eventClass: dataset.eventClass || '',
+			eventid: dataset.eventid
 		}
 	}
 
-	Simplecalendar.prototype.displayEvent = function (e) {
-		var month = this.month,
-			day = this.today
-
-		this.$calendar.find('.active').removeClass('active')
-		if (e) {
-			month = e.currentTarget.dataset.month,
-			day = e.currentTarget.dataset.day
-			e.currentTarget.classList.add('active')
-		}
-
-		$('.day-event.in', this.$elem).slideUp('fast')
-
-		$('.day-event[data-month="' + month + '"][data-day="' + day + '"][data-year="' + this.year + '"]', this.$elem).slideDown('fast').addClass('in')
-
-		this.options.onShowEvent()
+	Simplecalendar.prototype.removeEvent = function (day, month, year, key) {
+		// todo: add key support
+		this.events[year + '-' + month][day] = undefined // faster than delete
 	}
 
-	Simplecalendar.prototype.setCurrentDay = function (month, year) {
+	Simplecalendar.prototype.renderEvents = function () {
+		var events = this.events[this.year + '-' + this.month] || {}
+		Object.keys(events).map(function (_day) {
+			var day = events[_day],
+			$day = this.$calendar.find('td[data-month="' + this.month + '"][data-day="' + _day + '"][data-year="' + this.year + '"]').addClass('event taken'),
+			html = ''
+
+			var spans = Object.keys(day)
+			spans.map(function (key) {
+				html += '<span class="event-bullet ' + day[key].eventClass + '" title="' + day[key].from + ' - ' + day[key].to + '"></span>'
+			})
+			$day.attr('data-events', spans.join(',')).append(html)
+		}.bind(this))
+	}
+
+	Simplecalendar.prototype.dayClick = function (e) {
+		this.$selected = this.$all.find('.selected')
+
+		if (this.$selected.is(e.currentTarget)) { // toggle
+			e.currentTarget.classList.remove('active')
+			e.currentTarget.classList.remove('selected')
+			return
+		}
+
+		if (this.$selected.length > 1) {
+			this.$selected.removeClass('selected')
+			this.$all.find('.active').removeClass('active')
+		}
+
+		e.currentTarget.classList.add('active') // hover
+		e.currentTarget.classList.add('selected')
+
+		this.displayEvent(e.currentTarget.dataset.events)
+	}
+
+	Simplecalendar.prototype.displayEvent = function (id) {
+		if (!id) return
+		id = id.split(',')
+
+		this.$events.find('.in').slideUp('fast').removeClass('in')
+
+		for (var i = 0; i < id.length; i++) {
+			this.$events.find('.day-event[data-eventid="' + id[i] + '"]').slideDown('fast').addClass('in')
+		}
+
+		this.options.onShowEvent(id)
+	}
+
+	Simplecalendar.prototype.renderCurrentDay = function (month, year) {
 		this.$calendar.find('td[data-month="' + _month + '"][data-day="' + this.today + '"][data-year="' + _year + '"]').addClass('current-day')
+	}
+
+	Simplecalendar.prototype.markRange = function (to, from) {
+		// select all days in between and give class
+		if (this.$selected.length === 0) return // css hover does our job
+		if (!to || this.$selected.length === 2)
+			to = this.$selected[1]
+		to = to.dataset
+		from = this.$selected[0].dataset
+
+		var range = moment.range(new Date(from.year, from.month, from.day), new Date(to.year, to.month, to.day))
+		range.by('day', function (moment) {
+			this.$all.find('td[data-month="' + moment.month() + '"][data-day="' + moment.date() + '"]').addClass('active')
+		}.bind(this))
+	}
+
+	Simplecalendar.prototype.rangeHover = function (e) {
+		this.$selected = this.$all.find('.selected')
+		if (this.$selected.length === 2) return // don't mark if theres a range
+
+		this.$all.find('.active').removeClass('active')
+
+		this.markRange(e.currentTarget)
 	}
 
 	Simplecalendar.prototype.getMonthName = function (month) {
@@ -227,12 +304,8 @@
 			triggered = false
 		}.bind(this))
 
-		$('.close').click(function (e) {
+		$('.close', this).click(function (e) {
 			$(e.currentTarget).parent().slideUp('fast')
-		})
-
-		$('.print-btn').click(function () {
-			window.print()
 		})
 
 		return this
